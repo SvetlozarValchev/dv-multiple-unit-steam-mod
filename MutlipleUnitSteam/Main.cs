@@ -129,10 +129,10 @@ namespace MutlipleUnitSteam
         }
     }
 
-    [HarmonyPatch(typeof(LocoControllerSteam), "SetBrake")]
-    class LocoControllerSteam_SetBrake_Patch
+    [HarmonyPatch(typeof(LocoControllerBase), "SetBrake")]
+    class LocoControllerBase_SetBrake_Patch
     {
-        static void Postfix(LocoControllerSteam __instance, float brake)
+        static void Postfix(LocoControllerBase __instance, float brake)
         {
             TrainCar currentCar = __instance.GetComponent<TrainCar>();
             TrainCar targetCar = PlayerManager.Car;
