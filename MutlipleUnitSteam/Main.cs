@@ -97,10 +97,16 @@ namespace MutlipleUnitSteam
         static void Postfix(LocoControllerSteam __instance, float throttle)
         {
             TrainCar currentCar = __instance.GetComponent<TrainCar>();
-            TrainCar targetCar = PlayerManager.Car;
-            Trainset trainset = PlayerManager.Trainset;
+            TrainCar targetCar = null;
+            Trainset trainset = null;
 
-            if (currentCar == null || !targetCar || !targetCar.Equals(currentCar) || trainset == null || trainset.cars.Count < 2)
+            if (PlayerManager.Car != null && PlayerManager.Car.trainset != null)
+            {
+                targetCar = PlayerManager.Car;
+                trainset = PlayerManager.Car.trainset;
+            }
+
+            if (currentCar == null || targetCar == null || !targetCar.Equals(currentCar) || trainset == null || trainset.cars.Count < 2)
             {
                 return;
             }
@@ -132,13 +138,19 @@ namespace MutlipleUnitSteam
     [HarmonyPatch(typeof(LocoControllerBase), "SetBrake")]
     class LocoControllerBase_SetBrake_Patch
     {
-        static void Postfix(LocoControllerBase __instance, float brake)
+        static void Postfix(LocoControllerBase __instance, float nextTargetBrake)
         {
             TrainCar currentCar = __instance.GetComponent<TrainCar>();
-            TrainCar targetCar = PlayerManager.Car;
-            Trainset trainset = PlayerManager.Trainset;
+            TrainCar targetCar = null;
+            Trainset trainset = null;
 
-            if (currentCar == null || !targetCar || !targetCar.Equals(currentCar) || trainset == null || trainset.cars.Count < 2)
+            if (PlayerManager.Car != null && PlayerManager.Car.trainset != null)
+            {
+                targetCar = PlayerManager.Car;
+                trainset = PlayerManager.Car.trainset;
+            }
+
+            if (currentCar == null || targetCar == null || !targetCar.Equals(currentCar) || trainset == null || trainset.cars.Count < 2)
             {
                 return;
             }
@@ -160,7 +172,51 @@ namespace MutlipleUnitSteam
 
                     if (steamController)
                     {
-                        steamController.SetBrake(brake);
+                        steamController.SetBrake(nextTargetBrake);
+                    }
+                }
+            }
+        }
+    }
+
+    [HarmonyPatch(typeof(LocoControllerBase), "SetIndependentBrake")]
+    class LocoControllerBase_SetIndependentBrake_Patch
+    {
+        static void Postfix(LocoControllerBase __instance, float nextTargetIndependentBrake)
+        {
+            TrainCar currentCar = __instance.GetComponent<TrainCar>();
+            TrainCar targetCar = null;
+            Trainset trainset = null;
+
+            if (PlayerManager.Car != null && PlayerManager.Car.trainset != null)
+            {
+                targetCar = PlayerManager.Car;
+                trainset = PlayerManager.Car.trainset;
+            }
+
+            if (currentCar == null || targetCar == null || !targetCar.Equals(currentCar) || trainset == null || trainset.cars.Count < 2)
+            {
+                return;
+            }
+
+            List<TrainCar> trainsetCars = trainset.cars;
+
+            for (int i = 0; i < trainsetCars.Count; i++)
+            {
+                TrainCar car = trainsetCars[i];
+
+                if (targetCar.Equals(car))
+                {
+                    continue;
+                }
+
+                if (car.carType == TrainCarType.LocoSteamHeavy)
+                {
+                    LocoControllerSteam steamController = car.GetComponent<LocoControllerSteam>();
+
+                    if (steamController)
+                    {
+                        steamController.SetIndependentBrake(nextTargetIndependentBrake);
                     }
                 }
             }
@@ -173,10 +229,16 @@ namespace MutlipleUnitSteam
         static void Postfix(LocoControllerSteam __instance, float position)
         {
             TrainCar currentCar = __instance.GetComponent<TrainCar>();
-            TrainCar targetCar = PlayerManager.Car;
-            Trainset trainset = PlayerManager.Trainset;
+            TrainCar targetCar = null;
+            Trainset trainset = null;
 
-            if (currentCar == null || !targetCar || !targetCar.Equals(currentCar) || trainset == null || trainset.cars.Count < 2)
+            if (PlayerManager.Car != null && PlayerManager.Car.trainset != null)
+            {
+                targetCar = PlayerManager.Car;
+                trainset = PlayerManager.Car.trainset;
+            }
+
+            if (currentCar == null || targetCar == null || !targetCar.Equals(currentCar) || trainset == null || trainset.cars.Count < 2)
             {
                 return;
             }
@@ -198,9 +260,9 @@ namespace MutlipleUnitSteam
 
                     if (steamController)
                     {
-                        if (Trainset.GetCarsBehind(PlayerManager.Car).Contains(car))
+                        if (GetCarsBehind(PlayerManager.Car).Contains(car))
                         {
-                            if (Trainset.GetCarsInFrontOf(car).Contains(PlayerManager.Car))
+                            if (GetCarsInFrontOf(car).Contains(PlayerManager.Car))
                             {
                                 steamController.SetReverser(position);
                             }
@@ -209,9 +271,9 @@ namespace MutlipleUnitSteam
                                 steamController.SetReverser(position * -1f);
                             }
                         }
-                        else if (Trainset.GetCarsInFrontOf(PlayerManager.Car).Contains(car))
+                        else if (GetCarsInFrontOf(PlayerManager.Car).Contains(car))
                         {
-                            if (Trainset.GetCarsBehind(car).Contains(PlayerManager.Car))
+                            if (GetCarsBehind(car).Contains(PlayerManager.Car))
                             {
                                 steamController.SetReverser(position);
                             }
@@ -224,6 +286,24 @@ namespace MutlipleUnitSteam
                 }
             }
         }
+
+        public static List<TrainCar> GetCarsInFrontOf(TrainCar car)
+        {
+            return GetCarsCoupledTo(car.frontCoupler);
+        }
+
+        public static List<TrainCar> GetCarsBehind(TrainCar car)
+        {
+            return GetCarsCoupledTo(car.rearCoupler);
+        }
+
+        public static List<TrainCar> GetCarsCoupledTo(Coupler coupler)
+        {
+            List<TrainCar> trainCarList = new List<TrainCar>();
+            for (coupler = coupler.GetCoupled(); coupler != null; coupler = coupler.GetOppositeCoupler().GetCoupled())
+                trainCarList.Add(coupler.train);
+            return trainCarList;
+        }
     }
 
     [HarmonyPatch(typeof(LocoControllerSteam), "SetFireOn")]
@@ -232,10 +312,16 @@ namespace MutlipleUnitSteam
         static void Postfix(LocoControllerSteam __instance, float percentage)
         {
             TrainCar currentCar = __instance.GetComponent<TrainCar>();
-            TrainCar targetCar = PlayerManager.Car;
-            Trainset trainset = PlayerManager.Trainset;
+            TrainCar targetCar = null;
+            Trainset trainset = null;
 
-            if (currentCar == null || !targetCar || !targetCar.Equals(currentCar) || trainset == null || trainset.cars.Count < 2)
+            if (PlayerManager.Car != null && PlayerManager.Car.trainset != null)
+            {
+                targetCar = PlayerManager.Car;
+                trainset = PlayerManager.Car.trainset;
+            }
+
+            if (currentCar == null || targetCar == null || !targetCar.Equals(currentCar) || trainset == null || trainset.cars.Count < 2)
             {
                 return;
             }
@@ -270,10 +356,16 @@ namespace MutlipleUnitSteam
         static void Postfix(LocoControllerSteam __instance)
         {
             TrainCar currentCar = __instance.GetComponent<TrainCar>();
-            TrainCar targetCar = PlayerManager.Car;
-            Trainset trainset = PlayerManager.Trainset;
+            TrainCar targetCar = null;
+            Trainset trainset = null;
 
-            if (currentCar == null || !targetCar || !targetCar.Equals(currentCar) || trainset == null || trainset.cars.Count < 2)
+            if (PlayerManager.Car != null && PlayerManager.Car.trainset != null)
+            {
+                targetCar = PlayerManager.Car;
+                trainset = PlayerManager.Car.trainset;
+            }
+
+            if (currentCar == null || targetCar == null || !targetCar.Equals(currentCar) || trainset == null || trainset.cars.Count < 2)
             {
                 return;
             }
@@ -308,10 +400,16 @@ namespace MutlipleUnitSteam
         static void Postfix(LocoControllerSteam __instance, float percentage)
         {
             TrainCar currentCar = __instance.GetComponent<TrainCar>();
-            TrainCar targetCar = PlayerManager.Car;
-            Trainset trainset = PlayerManager.Trainset;
+            TrainCar targetCar = null;
+            Trainset trainset = null;
 
-            if (currentCar == null || !targetCar || !targetCar.Equals(currentCar) || trainset == null || trainset.cars.Count < 2)
+            if (PlayerManager.Car != null && PlayerManager.Car.trainset != null)
+            {
+                targetCar = PlayerManager.Car;
+                trainset = PlayerManager.Car.trainset;
+            }
+
+            if (currentCar == null || targetCar == null || !targetCar.Equals(currentCar) || trainset == null || trainset.cars.Count < 2)
             {
                 return;
             }
@@ -360,11 +458,11 @@ namespace MutlipleUnitSteam
 
             sanderCtrl.ValueChanged += (e =>
             {
-                if (PlayerManager.Trainset == null) return;
+                if (PlayerManager.Car == null || PlayerManager.Car.trainset == null) return;
 
-                for (int i = 0; i < PlayerManager.Trainset.cars.Count; i++)
+                for (int i = 0; i < PlayerManager.Car.trainset.cars.Count; i++)
                 {
-                    TrainCar car = PlayerManager.Trainset.cars[i];
+                    TrainCar car = PlayerManager.Car.trainset.cars[i];
 
                     if (PlayerManager.Car.Equals(car))
                     {
@@ -387,11 +485,11 @@ namespace MutlipleUnitSteam
 
             blowerCtrl.ValueChanged += (e =>
             {
-                if (PlayerManager.Trainset == null) return;
+                if (PlayerManager.Car == null || PlayerManager.Car.trainset == null) return;
 
-                for (int i = 0; i < PlayerManager.Trainset.cars.Count; i++)
+                for (int i = 0; i < PlayerManager.Car.trainset.cars.Count; i++)
                 {
-                    TrainCar car = PlayerManager.Trainset.cars[i];
+                    TrainCar car = PlayerManager.Car.trainset.cars[i];
 
                     if (PlayerManager.Car.Equals(car))
                     {
@@ -414,11 +512,11 @@ namespace MutlipleUnitSteam
 
             injectorCtrl.ValueChanged += (e =>
             {
-                if (PlayerManager.Trainset == null) return;
+                if (PlayerManager.Car == null || PlayerManager.Car.trainset == null) return;
 
-                for (int i = 0; i < PlayerManager.Trainset.cars.Count; i++)
+                for (int i = 0; i < PlayerManager.Car.trainset.cars.Count; i++)
                 {
-                    TrainCar car = PlayerManager.Trainset.cars[i];
+                    TrainCar car = PlayerManager.Car.trainset.cars[i];
 
                     if (PlayerManager.Car.Equals(car))
                     {
@@ -441,11 +539,11 @@ namespace MutlipleUnitSteam
 
             waterDumpCtrl.ValueChanged += (e =>
             {
-                if (PlayerManager.Trainset == null) return;
+                if (PlayerManager.Car == null || PlayerManager.Car.trainset == null) return;
 
-                for (int i = 0; i < PlayerManager.Trainset.cars.Count; i++)
+                for (int i = 0; i < PlayerManager.Car.trainset.cars.Count; i++)
                 {
-                    TrainCar car = PlayerManager.Trainset.cars[i];
+                    TrainCar car = PlayerManager.Car.trainset.cars[i];
 
                     if (PlayerManager.Car.Equals(car))
                     {
@@ -468,11 +566,11 @@ namespace MutlipleUnitSteam
 
             steamReleaseCtrl.ValueChanged += (e =>
             {
-                if (PlayerManager.Trainset == null) return;
+                if (PlayerManager.Car == null || PlayerManager.Car.trainset == null) return;
 
-                for (int i = 0; i < PlayerManager.Trainset.cars.Count; i++)
+                for (int i = 0; i < PlayerManager.Car.trainset.cars.Count; i++)
                 {
-                    TrainCar car = PlayerManager.Trainset.cars[i];
+                    TrainCar car = PlayerManager.Car.trainset.cars[i];
 
                     if (PlayerManager.Car.Equals(car))
                     {
@@ -495,11 +593,11 @@ namespace MutlipleUnitSteam
 
             draftPullerCtrl.ValueChanged += (e =>
             {
-                if (PlayerManager.Trainset == null) return;
+                if (PlayerManager.Car == null || PlayerManager.Car.trainset == null) return;
 
-                for (int i = 0; i < PlayerManager.Trainset.cars.Count; i++)
+                for (int i = 0; i < PlayerManager.Car.trainset.cars.Count; i++)
                 {
-                    TrainCar car = PlayerManager.Trainset.cars[i];
+                    TrainCar car = PlayerManager.Car.trainset.cars[i];
 
                     if (PlayerManager.Car.Equals(car))
                     {
@@ -522,11 +620,11 @@ namespace MutlipleUnitSteam
 
             fireDoorLeverCtrl.ValueChanged += (e =>
             {
-                if (PlayerManager.Trainset == null) return;
+                if (PlayerManager.Car == null || PlayerManager.Car.trainset == null) return;
 
-                for (int i = 0; i < PlayerManager.Trainset.cars.Count; i++)
+                for (int i = 0; i < PlayerManager.Car.trainset.cars.Count; i++)
                 {
-                    TrainCar car = PlayerManager.Trainset.cars[i];
+                    TrainCar car = PlayerManager.Car.trainset.cars[i];
 
                     if (PlayerManager.Car.Equals(car))
                     {
